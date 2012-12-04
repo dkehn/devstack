@@ -2,8 +2,8 @@
 
 # ``stack.sh`` is an opinionated OpenStack developer installation.  It
 # installs and configures various combinations of **Ceilometer**, **Cinder**,
-# **Glance**, **Heat**, **Horizon**, **Keystone**, **Nova**, **Quantum**
-# and **Swift**, **reddwarf**
+# **Glance**, **Heat**, **Horizon**, **Keystone**, **Nova**, **Quantum**,
+#  **Swift**, and **reddwarf**
 
 # This script allows you to specify configuration options of what git
 # repositories to use, enabled services, network configuration and various
