@@ -3,7 +3,7 @@
 # ``stack.sh`` is an opinionated OpenStack developer installation.  It
 # installs and configures various combinations of **Ceilometer**, **Cinder**,
 # **Glance**, **Heat**, **Horizon**, **Keystone**, **Nova**, **Quantum**
-# and **Swift**
+# and **Swift**, **reddwarf**
 
 # This script allows you to specify configuration options of what git
 # repositories to use, enabled services, network configuration and various
@@ -314,6 +314,7 @@ source $TOP_DIR/lib/ceilometer
 source $TOP_DIR/lib/heat
 source $TOP_DIR/lib/quantum
 source $TOP_DIR/lib/tempest
+source $TOP_DIR/lib/reddwarf
 
 # Set the destination directories for OpenStack projects
 HORIZON_DIR=$DEST/horizon
@@ -851,7 +852,10 @@ fi
 if is_service_enabled ryu || (is_service_enabled quantum && [[ "$Q_PLUGIN" = "ryu" ]]); then
     git_clone $RYU_REPO $RYU_DIR $RYU_BRANCH
 fi
-
+if is_service_enabled reddwarf; then
+    install_reddwarf
+    install_reddwarfclient
+fi
 
 # Initialization
 # ==============
@@ -898,6 +902,13 @@ fi
 if is_service_enabled cinder; then
     configure_cinder
 fi
+if is_service_enabled reddwarf; then
+    echo "=================================================="
+    configure_reddwarfclient
+    echo "=================================================="
+    configure_reddwarf
+    echo "=================================================="
+fi
 if is_service_enabled ryu || (is_service_enabled quantum && [[ "$Q_PLUGIN" = "ryu" ]]); then
     setup_develop $RYU_DIR
 fi
@@ -910,6 +921,9 @@ if [[ $TRACK_DEPENDS = True ]] ; then
     echo "Ran stack.sh in depend tracking mode, bailing out now"
     exit 0
 fi
+
+echo "Complete"
+exit 0
 
 
 # Syslog
@@ -1876,7 +1890,7 @@ if is_service_enabled q-svc; then
 
 elif is_service_enabled $DATABASE_BACKENDS && is_service_enabled n-net; then
     # Create a small network
-    $NOVA_BIN_DIR/nova-manage network create "$PRIVATE_NETWORK_NAME" $FIXED_RANGE 1 $FIXED_NETWORK_SIZE $NETWORK_CREATE_ARGS
+    #$NOVA_BIN_DIR/nova-manage network create "$PRIVATE_NETWORK_NAME" $FIXED_RANGE 1 $FIXED_NETWORK_SIZE $NETWORK_CREATE_ARGS
 
     # Create some floating ips
     $NOVA_BIN_DIR/nova-manage floating create $FLOATING_RANGE --pool=$PUBLIC_NETWORK
