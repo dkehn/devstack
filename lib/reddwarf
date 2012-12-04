@@ -1,0 +1,175 @@
+# lib/reddwarf
+# Install and start Reddwarf (DBaaS) service
+# To enable, add the following to localrc
+# ENABLED_SERVICES+=,reddwarf,r-api-cfn,r-api-cw,r-eng,r-meta
+
+# Dependencies:
+# - functions
+
+# stack.sh
+# ---------
+# install_XXX
+# configure_XXX
+# init_XXX
+# start_XXX
+# stop_XXX
+# cleanup_XXX
+
+# Save trace setting
+XTRACE=$(set +o | grep xtrace)
+set +o xtrace
+
+# msgout() - prints message with sevarity and time to stdout.
+function msgout() {
+    local level=$1
+    local str=$2
+    local tm=`date +"%Y-%m-%d %H:%M:%S"`
+    if [ $level = "DEBUG" ] && [ -z $VERBOSE ]; then
+            return 0
+    else
+        echo "$tm: $PROG [$$]: $1: $str"
+    fi
+
+    return 0
+}
+
+# Defaults
+# --------
+REDDWARF_DIR=$DEST/reddwarf
+REDDWARFCLIENT_DIR=$DEST/python-reddwarfclient
+# set up default directories
+
+# cleanup_reddwarf() - Remove residual data files, anything left over from previous
+# runs that a clean run would need to clean up
+function cleanup_reddwarf() {
+    local mod="cleanup_reddwarf"
+    # This function intentionally left blank
+    msgout "DEBUG" "$mod:<-- "
+    msgout "DEBUG" "$mod:--> "
+}
+
+# configure_reddwarfclient() - Set config files, create data dirs, etc
+function configure_reddwarfclient() {
+    local mod="configure_reddwarfclient"
+    msgout "DEBUG" "$mod<-- "    
+    setup_develop $REDDWARFCLIENT_DIR
+    msgout "DEBUG" "$mod:-->"
+}
+
+# configure_reddwarf() - Set config files, create data dirs, etc
+function configure_reddwarf() {
+    local mod="configure_reddwarf"
+    msgout "DEBUG" "$mod<-- ($REDDWARF_DIR)"    
+    setup_develop $REDDWARF_DIR
+
+    create_package_repo
+    munge_apache2
+    add_dbass_mycnf_to_package_repo
+
+    msgout "DEBUG" "$mod:-->"
+}
+
+function create_package_repo() {
+    local mod="create_pacakge_repo"
+    msgout "DEBUG" "$mod<-- "    
+    pkg_install reprepro apache2 bc debhelper
+
+    # install the apt repo from /var/www
+    # add distributions file to conf
+    sudo mkdir -p $PACKAGES_DIR/{conf,incoming}
+
+    echo 'Origin: Rackspace
+Label: Rackspace
+Codename: squeeze
+Architectures: i386 amd64
+Components: main
+Description: Rackspace DBaaS APT Repository' | sudo tee $PACKAGES_DIR/conf/distributions
+    msgout "DEBUG" "$mod:-->"
+}
+
+function munge_apache2() {
+    local mod="munge_apache2"
+    msgout "DEBUG" "$mod<-- "    
+
+    # If the Additional Listen port is not in the conf, add it
+    is_in_portsfile=`grep 'Listen 8080' /etc/apache2/ports.conf |wc -l`
+    if [ $is_in_portsfile == 0 ]
+    then
+	echo "Listen 8080" | sudo tee -a /etc/apache2/ports.conf
+    fi
+
+    # Add the vhost for 8080 because horizon is using 80
+    echo "<VirtualHost *:8080>
+
+    DocumentRoot /var/lib/packages
+
+    ErrorLog /var/log/apache2/error.log
+    LogLevel warn
+    CustomLog /var/log/apache2/access.log combined
+</VirtualHost>
+	" | sudo tee /etc/apache2/sites-available/001-apt-repo
+
+    sudo a2ensite 001-apt-repo
+    sudo service apache2 reload
+    msgout "DEBUG" "$mod:-->"
+}
+
+function add_dbass_mycnf_to_package_repo() {
+    local mod="munge_apache2"
+    msgout "DEBUG" "$mod<-- "    
+
+    mkdir -p $PACKAGES_DIR
+    mkdir -p $BUILD_DIR
+    cp -R $PATH_REDDWARF/contrib/dbaas-mycnf $BUILD_DIR
+    cd $BUILD_DIR/dbaas-mycnf
+    sudo -E ./builddeb.sh
+    sudo -E reprepro -Vb $PACKAGES_DIR remove squeeze dbaas-mycnf
+    sudo -E reprepro --ignore=wrongdistribution -Vb $PACKAGES_DIR include squeeze *.changes
+    msgout "DEBUG" "mod:-->"
+}
+
+# init_reddwarf() - Initialize database
+function init_reddwarf() {
+    local mod="init_reddwarf"
+    msgout "DEBUG" "$mod<-- "    
+    msgout "DEBUG" "mod:-->"
+}
+
+
+
+# install_reddwarfclient() - Collect source and prepare
+function install_reddwarfclient() {
+    local mod="install_reddwarfclient"
+    msgout "DEBUG" "$mod<-- "    
+    git_clone $REPO_REDDWARFCLIENT $PATH_PYTHON_REDDWARFCLIENT $BRANCH_REDDWARFCLIENT 
+
+    msgout "DEBUG" "mod:-->"
+}
+
+# install_reddwarf() - Collect source and prepare
+function install_reddwarf() {
+    local mod="install_reddwarf"
+    msgout "DEBUG" "$mod<-- "    
+    git_clone $REPO_REDDWARF $PATH_REDDWARF $BRANCH_REDDWARF                                         
+    msgout "DEBUG" "mod:-->"
+}
+
+# start_reddwarf() - Start running processes, including screen
+function start_reddwarf() {
+    local mod="start_reddwarf"
+    msgout "DEBUG" "$mod<-- "    
+
+    msgout "DEBUG" "mod:-->"
+}
+
+# stop_reddwarf() - Stop running processes
+function stop_reddwarf() {
+    local mod="stop_reddwarf"
+    msgout "DEBUG" "$mod<-- "    
+
+    msgout "DEBUG" "mod:-->"
+
+}
+
+# Restore xtrace
+$XTRACE
