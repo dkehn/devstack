@@ -48,6 +48,47 @@ function cleanup_reddwarf() {
     msgout "DEBUG" "$mod:--> "
 }
 
+function rd_manage() {
+    cd $PATH_REDDWARF
+    bin/reddwarf-manage --config-file=$USERHOME/reddwarf.conf $@
+}
+
+function mod_test_conf() {
+    cp $REDSTACK_SCRIPTS/conf/test_begin.conf $USERHOME/test.conf
+    sed -i "s/\/integration\/report/$ESCAPED_REDSTACK_SCRIPTS\/\.\.\/report/" $USERHOME/test.conf
+    EXTRA_CONF=$REDSTACK_SCRIPTS/conf/test.extra.conf
+    if [ -e $EXTRA_CONF ]; then
+        cat $EXTRA_CONF >> $USERHOME/test.conf
+    fi
+    cat $REDSTACK_SCRIPTS/conf/test_end.conf >> $USERHOME/test.conf
+}
+
+function add_flavor() {
+    local mod="add_flavor"
+    msgout "DEBUG" "$mod<--($1, $2, $3, $4) "    
+    FLAVOR_NAME=$1
+    FLAVOR_ID=$2
+    FLAVOR_MEMORY_MB=$3
+    FLAVOR_ROOT_GB=$4
+    msgout "INFO" "Adding flavor $FLAVOR_ID ($FLAVOR_NAME), memory=$FLAVOR_MEMORY_MB, root_gb=$FLAVOR_ROOT_GB"
+    mysql_nova "INSERT INTO instance_types (name, id, memory_mb, vcpus, deleted, ephemeral_gb, rxtx_factor, flavorid, root_gb, disabled, is_public) VALUES('$FLAVOR_NAME', $FLAVOR_ID, $FLAVOR_MEMORY_MB, 1, 0, 40, 1, $FLAVOR_ID, $FLAVOR_ROOT_GB, 0, 1);"
+    msgout "DEBUG" "$mod:-->"    
+}
+
+function add_flavors() {
+    local mod="add_flavors"
+    msgout "DEBUG" "$mod<-- "    
+    # Incredibly useful for testing resize in a VM.
+    set +e
+    add_flavor 'tinier' 6 506 10
+    # It can also be useful to have a flavor with 512 megs and a bit of disk space.
+    add_flavor 'm1.rd-tiny' 7 512 2
+    # Its also useful to have a slightly bigger flavor...
+    add_flavor 'm1.rd-smaller' 8 768 2
+    set -e
+    msgout "DEBUG" "$mod:-->"    
+}
+
 # configure_reddwarfclient() - Set config files, create data dirs, etc
 function configure_reddwarfclient() {
     local mod="configure_reddwarfclient"
@@ -132,9 +173,19 @@ function add_dbass_mycnf_to_package_repo() {
 function init_reddwarf() {
     local mod="init_reddwarf"
     msgout "DEBUG" "$mod<-- "    
+
+    mod_test_conf
+    msgout "DEBUG" "$mod: recreating the reddwarf DB"    
+    recreate_database reddwarf latin1
+
+    # NOTE: Examine why redstack creates keystone users:
+    #   Daffy & reddwarf
+    #  response: will not create due to these are testing users for redstack
+    #  		 devstack uses ADMIN & DEMO.
+    rd_manage db_sync
+    add_flavors
     msgout "DEBUG" "mod:-->"
 }
-
 
 
 # install_reddwarfclient() - Collect source and prepare

@@ -6,18 +6,19 @@ RC_DIR=$(cd $(dirname "$BASH_SOURCE") && pwd)
 # Destination path for installation
 DEST=/opt/stack
 
-# Select the default database
-DATABASE_TYPE=mysql
-
 # Specify which services to launch.  These generally correspond to
 # screen tabs. To change the default list, use the ``enable_service`` and
 # ``disable_service`` functions in ``localrc``.
 # For example, to enable Swift add this to ``localrc``:
 # enable_service swift
-ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-cond,cinder,c-sch,c-api,c-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,rabbit,$DATABASE_TYPE
+#
+# And to disable Cinder and use Nova Volumes instead:
+# disable_service c-api c-sch c-vol cinder
+# enable_service n-vol
+ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,cinder,c-sch,c-api,c-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,mysql,rabbit
 
 # Set the default Nova APIs to enable
-NOVA_ENABLED_APIS=ec2,osapi_compute,metadata
+NOVA_ENABLED_APIS=ec2,osapi_compute,osapi_volume,metadata
 
 # Repositories
 # ------------
@@ -27,7 +28,7 @@ NOVA_ENABLED_APIS=ec2,osapi_compute,metadata
 GIT_BASE=https://github.com
 
 # metering service
-CEILOMETER_REPO=${GIT_BASE}/openstack/ceilometer.git
+CEILOMETER_REPO=https://github.com/stackforge/ceilometer.git
 CEILOMETER_BRANCH=master
 
 # volume service
@@ -100,14 +101,6 @@ TEMPEST_BRANCH=master
 HEAT_REPO=${GIT_BASE}/heat-api/heat.git
 HEAT_BRANCH=master
 
-# python heat client library
-HEATCLIENT_REPO=${GIT_BASE}/heat-api/python-heatclient.git
-HEATCLIENT_BRANCH=master
-
-# ryu service
-RYU_REPO=https://github.com/osrg/ryu.git
-RYU_BRANCH=master
-
 # Nova hypervisor configuration.  We default to libvirt with **kvm** but will
 # drop back to **qemu** if we are unable to load the kvm module.  ``stack.sh`` can
 # also install an **LXC** or **OpenVZ** based system.
@@ -139,21 +132,37 @@ fi
 #IMAGE_URLS="http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img" # cirros full disk image
 
 # Set default image based on ``VIRT_DRIVER`` and ``LIBVIRT_TYPE``, either of
-# which may be set in ``localrc``.  Also allow ``DEFAULT_IMAGE_NAME`` and
+# which may be set in ``localrc``.  Also allow ``DEFAULT_IMAGE_NAME`` and 
 # ``IMAGE_URLS`` to be set directly in ``localrc``.
 case "$VIRT_DRIVER" in
-    openvz)
+    openvz) 
         DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-ubuntu-11.10-x86_64}
         IMAGE_URLS=${IMAGE_URLS:-"http://download.openvz.org/template/precreated/ubuntu-11.10-x86_64.tar.gz"};;
     libvirt)
-        case "$LIBVIRT_TYPE" in
-            lxc) # the cirros root disk in the uec tarball is empty, so it will not work for lxc
-                DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-cirros-0.3.0-x86_64-rootfs}
-                IMAGE_URLS=${IMAGE_URLS:-"http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-rootfs.img.gz"};;
-            *) # otherwise, use the uec style image (with kernel, ramdisk, disk)
-                DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-cirros-0.3.0-x86_64-uec}
-                IMAGE_URLS=${IMAGE_URLS:-"http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-uec.tar.gz"};;
-        esac
+
+
+	case "$LIBVIRT_TYPE" in
+    	    lxc) # Using the 12.04 LTS version.
+		IMAGE_URLS="http://cloud-images.ubuntu.com/releases/precise/release/ubuntu-12.04-server-cloudimg-amd64.tar.gz,http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-rootfs.img.gz";;
+ 	   *)  # otherwise, use the uec style image (with kernel, ramdisk, disk)
+		IMAGE_URLS="http://cloud-images.ubuntu.com/releases/precise/release/ubuntu-12.04-server-cloudimg-amd64.tar.gz,http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-uec.tar.gz";;
+	esac
+
+#	case "$LIBVIRT_TYPE" in
+#    	    lxc) # the cirros root disk in the uec tarball is empty, so it will not work for lxc
+#		IMAGE_URLS="http://cloud-images.ubuntu.com/releases/oneiric/release/ubuntu-11.10-server-cloudimg-amd64.tar.gz,http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-rootfs.img.gz";;
+# 	   *)  # otherwise, use the uec style image (with kernel, ramdisk, disk)
+#		IMAGE_URLS="http://cloud-images.ubuntu.com/releases/oneiric/release/ubuntu-11.10-server-cloudimg-amd64.tar.gz,http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-uec.tar.gz";;
+#	esac
+
+#        case "$LIBVIRT_TYPE" in
+#            lxc) # the cirros root disk in the uec tarball is empty, so it will not work for lxc
+#                DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-cirros-0.3.0-x86_64-rootfs}
+#                IMAGE_URLS=${IMAGE_URLS:-"http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-rootfs.img.gz"};;
+#            *) # otherwise, use the uec style image (with kernel, ramdisk, disk)
+#                DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-cirros-0.3.0-x86_64-uec}
+#                IMAGE_URLS=${IMAGE_URLS:-"http://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-uec.tar.gz"};;
+#        esac
         ;;
     *) # otherwise, use the uec style image (with kernel, ramdisk, disk)
         DEFAULT_IMAGE_NAME=${DEFAULT_IMAGE_NAME:-cirros-0.3.0-x86_64-uec}
@@ -162,6 +171,3 @@ esac
 
 # 5Gb default volume backing file size
 VOLUME_BACKING_FILE_SIZE=${VOLUME_BACKING_FILE_SIZE:-5130M}
-
-PRIVATE_NETWORK_NAME=${PRIVATE_NETWORK_NAME:-"private"}
-PUBLIC_NETWORK_NAME=${PUBLIC_NETWORK_NAME:-"nova"}

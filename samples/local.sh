@@ -65,3 +65,6 @@ fi
 nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
 nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
 
+# In the multi-node configuration the first 10 or so IPs in the private subnet are usually reserved. 
+# Add this to local.sh to have it run after every stack.sh run
+for i in `seq 2 10`; do /opt/stack/nova/bin/nova-manage fixed reserve 192.168.2.$i; 

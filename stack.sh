@@ -922,9 +922,6 @@ if [[ $TRACK_DEPENDS = True ]] ; then
     exit 0
 fi
 
-echo "Complete"
-exit 0
-
 
 # Syslog
 # ------

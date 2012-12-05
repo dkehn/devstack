@@ -27,6 +27,7 @@ DATA_DIR=${DATA_DIR:-${DEST}/data}
 # Get project function libraries
 source $TOP_DIR/lib/cinder
 source $TOP_DIR/lib/horizon
+source $TOP_DIR/lib/reddwarf
 
 # Determine what system we are running on.  This provides ``os_VENDOR``,
 # ``os_RELEASE``, ``os_UPDATE``, ``os_PACKAGE``, ``os_CODENAME``
@@ -53,6 +54,11 @@ fi
 # Apache has the WSGI processes
 if is_service_enabled horizon; then
     stop_horizon
+fi
+
+# reddwarf
+if is_service_enabled reddwarf; then
+    stop_reddwarf
 fi
 
 SCSI_PERSIST_DIR=$CINDER_STATE_PATH/volumes/*
