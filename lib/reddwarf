@@ -37,6 +37,7 @@ function msgout() {
 # --------
 REDDWARF_DIR=$DEST/reddwarf
 REDDWARFCLIENT_DIR=$DEST/python-reddwarfclient
+
 # set up default directories
 
 # cleanup_reddwarf() - Remove residual data files, anything left over from previous
@@ -161,7 +162,7 @@ function add_dbass_mycnf_to_package_repo() {
 
     mkdir -p $PACKAGES_DIR
     mkdir -p $BUILD_DIR
-    cp -R $PATH_REDDWARF/contrib/dbaas-mycnf $BUILD_DIR
+    cp -R $REDDWARF_DIR/contrib/dbaas-mycnf $BUILD_DIR
     cd $BUILD_DIR/dbaas-mycnf
     sudo -E ./builddeb.sh
     sudo -E reprepro -Vb $PACKAGES_DIR remove squeeze dbaas-mycnf
@@ -192,8 +193,7 @@ function init_reddwarf() {
 function install_reddwarfclient() {
     local mod="install_reddwarfclient"
     msgout "DEBUG" "$mod<-- "    
-    git_clone $REPO_REDDWARFCLIENT $PATH_PYTHON_REDDWARFCLIENT $BRANCH_REDDWARFCLIENT 
-
+    git_clone $REDDWARFCLIENT_REPO $REDDWARFCLIENT_PATH $REDDWARFCLIENT_BRANCH
     msgout "DEBUG" "mod:-->"
 }
 
@@ -201,7 +201,7 @@ function install_reddwarfclient() {
 function install_reddwarf() {
     local mod="install_reddwarf"
     msgout "DEBUG" "$mod<-- "    
-    git_clone $REPO_REDDWARF $PATH_REDDWARF $BRANCH_REDDWARF                                         
+    git_clone $REDDWARF_REPO $REDDWARF_DIR $REDDWARF_BRANCH                                         
     msgout "DEBUG" "mod:-->"
 }
 
