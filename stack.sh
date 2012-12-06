@@ -903,11 +903,8 @@ if is_service_enabled cinder; then
     configure_cinder
 fi
 if is_service_enabled reddwarf; then
-    echo "=================================================="
     configure_reddwarfclient
-    echo "=================================================="
     configure_reddwarf
-    echo "=================================================="
 fi
 if is_service_enabled ryu || (is_service_enabled quantum && [[ "$Q_PLUGIN" = "ryu" ]]); then
     setup_develop $RYU_DIR
@@ -921,10 +918,6 @@ if [[ $TRACK_DEPENDS = True ]] ; then
     echo "Ran stack.sh in depend tracking mode, bailing out now"
     exit 0
 fi
-
-echo "Complete"
-exit 0
-
 
 # Syslog
 # ------
@@ -1936,6 +1929,17 @@ if is_service_enabled heat; then
     start_heat
 fi
 
+# Configure and launch the reddwarf database as a service api and metadata
+if is_service_enabled reddwarf; then
+    # Initialize reddwarf
+    echo_summary "Configuring Reddwarf"
+    init_reddwarf
+    #echo_summary "Starting Reddwarf"
+    #start_reddwarf
+fi
+
+echo_summary "Done for now"
+exit 0
 
 # Install Images
 # ==============
