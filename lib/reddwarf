@@ -1,7 +1,7 @@
 # lib/reddwarf
 # Install and start Reddwarf (DBaaS) service
 # To enable, add the following to localrc
-# ENABLED_SERVICES+=,reddwarf,r-api-cfn,r-api-cw,r-eng,r-meta
+# ENABLED_SERVICES+=,reddwarf,rd-api,rd-tmgr
 
 # Dependencies:
 # - functions
@@ -41,7 +41,8 @@ BUILD_DIR=/tmp/build/
 PATH_INTEGRATION_CONF=/tmp/reddwarf-integration/
 PATH_ENV_CONF=$PATH_INTEGRATION_CONF/env.rc
 USERHOME=$HOME
-
+DISKIMAGEBUILDER_DIR=$DEST/diskimage-builder
+RELEASE=precise
 #REDDWARF_DATA_DIR=${REDDWARF_DATA_DIR:-${DATA_DIR}/reddwarf}
 
 ###############################################################################
@@ -58,9 +59,8 @@ function rd_manage() {
     bin/reddwarf-manage --config-file=$USERHOME/reddwarf.conf $@
 }
 
- 
 ###############################################################################
-# Misc helper functions
+# Package Repo related helper functions
 ###############################################################################
 
 function create_package_repo() {
@@ -122,6 +122,10 @@ function add_dbass_mycnf_to_package_repo() {
     sudo -E reprepro --ignore=wrongdistribution --ignore=undefinedtarget -Vb $PACKAGES_DIR include squeeze *.changes
     msgout "DEBUG" "mod:-->"
 }
+
+###############################################################################
+# Configure Keystone for Reddwarf related helper functions
+###############################################################################
 
 function keystone_add_user() {
     # Adds a user. Prints the UUID to standard out.
@@ -269,6 +273,10 @@ REDDWARF_ROLE=$REDDWARF_ROLE
 
 }
 
+###############################################################################
+# Setup Reddwarf Config file and related functions 
+###############################################################################
+
 function service_report_log_directory {
     # enable logging for the service when running in CI
     if [ -n "$CI_RUN" ]; then
@@ -285,12 +293,19 @@ function fix_rd_configfile() {
 
     # Fix the tokens in the conf files
     sed -i "s/f7999d1955c5014aa32c/$RABBIT_PASSWORD/g" $USERHOME/reddwarf.conf
+    sed -i "s/f7999d1955c5014aa32c/$RABBIT_PASSWORD/g" $USERHOME/reddwarf-taskmanager.conf
     sed -i "s/e1a2c042c828d3566d0a/$DATABASE_PASSWORD/g" $USERHOME/reddwarf.conf
+    sed -i "s/e1a2c042c828d3566d0a/$DATABASE_PASSWORD/g" $USERHOME/reddwarf-taskmanager.conf
     sed -i "s/be19c524ddc92109a224/$SERVICE_TOKEN/g" $USERHOME/reddwarf.conf
+    sed -i "s/be19c524ddc92109a224/$SERVICE_TOKEN/g" $USERHOME/reddwarf-taskmanager.conf
 
     service_report_log_directory reddwarf
     service_report_log_directory reddwarf-taskmanager
 }
+
+###############################################################################
+# Adding new flavours to nova and related functions
+###############################################################################
 
 function add_flavor() {
     FLAVOR_NAME=$1
@@ -312,6 +327,51 @@ function add_flavors() {
     set -e
 }
 
+###############################################################################
+# Building guest image and related functions
+###############################################################################
+function build_image() {
+    msgout "DEBUG" "Building an image for use with development and integration tests."
+    if [ -z "$1" ]
+    then
+        SERVICE_TYPE=$1
+    else
+        SERVICE_TYPE=dbaas-mysql
+    fi
+
+    if [ -z "$2" ]
+    then
+        ARCH=$2
+    else
+        ARCH=i386
+    fi
+
+
+    mkdir -p $USERHOME/images
+    VM_PATH=$USERHOME/images/precise_${SERVICE_TYPE}_image
+
+    # If the path doesnt exist, build it, otherwise just upload it
+    if [ ! -d $VM_PATH ]
+    then
+        build_vm $VM_PATH $SERVICE_TYPE $ARCH
+    else
+        msgout "DEBUG" "Found image in $VM_PATH using the qcow2 image found here..."
+    fi
+
+    QCOW_IMAGE=`find $VM_PATH -name '*.qcow2'`
+    REDDWARF_TOKEN=`retrieve_token reddwarf REDDWARF-PASS reddwarf`
+
+    # Now upload it
+    upload_image_to_glance "reddwarf_guest_${$SERVICE_TYPE}" ovf qcow2 $REDDWARF_TOKEN $QCOW_IMAGE $SERVICE_TYPE
+}
+
+function build_vm() {      
+    VM_PATH=$1
+    SERVICE_TYPE_ELEMENT=$2    
+    ARCH=$3
+    NOVA_VM_ELEMENT=nova-vm
+    sudo $DISKIMAGEBUILDER_DIR/bin/disk-image-create –o $VM_PATH -a $ARCH $NOVA_VM_ELEMENT $SERVICE_TYPE_ELEMENT
+}
 
 ###############################################################################
 # stack.sh entry points
@@ -361,8 +421,6 @@ function configure_reddwarf() {
     create_package_repo
     munge_apache2
     add_dbass_mycnf_to_package_repo
-    
-    #init_reddwarf
 
     msgout "DEBUG" "$mod:-->"
 }
@@ -371,7 +429,7 @@ function configure_reddwarf() {
 function install_reddwarfclient() {
     local mod="install_reddwarfclient"
     msgout "DEBUG" "$mod<-- "    
-    git_clone $REDDWARFCLIENT_REPO $REDDWARFCLIENT_PATH $REDDWARFCLIENT_BRANCH
+    git_clone $REDDWARFCLIENT_REPO $REDDWARFCLIENT_DIR $REDDWARFCLIENT_BRANCH
     msgout "DEBUG" "mod:-->"
 }
 
@@ -379,7 +437,15 @@ function install_reddwarfclient() {
 function install_reddwarf() {
     local mod="install_reddwarf"
     msgout "DEBUG" "$mod<-- "    
-    git_clone $REDDWARF_REPO $REDDWARF_DIR $REDDWARF_BRANCH                                         
+    git_clone $REDDWARF_REPO $REDDWARF_DIR $REDDWARF_BRANCH
+    msgout "DEBUG" "mod:-->"
+}
+
+# install_reddwarf() - Collect source and prepare
+function install_diskimagebuilder() {
+    local mod="install_diskimagebuilder"
+    msgout "DEBUG" "$mod<-- "    
+    git_clone $DISKIMAGEBUILDER_REPO $DISKIMAGEBUILDER_DIR $DISKIMAGEBUILDER_BRANCH
     msgout "DEBUG" "mod:-->"
 }
 
@@ -406,6 +472,9 @@ function init_reddwarf() {
     msgout "DEBUG" "Adding reddwarf specific flavours..."
     add_flavors
 
+    msgout "DEBUG" "Building reddwarf guest..."    
+    build_image
+
     msgout "DEBUG" "mod:-->"
 }
 
@@ -413,6 +482,8 @@ function init_reddwarf() {
 function start_reddwarf() {
     local mod="start_reddwarf"
     msgout "DEBUG" "$mod<-- "    
+    screen_it rd-api "cd $REDDWARF_DIR; bin/reddwarf-api --config-file=$USERHOME/reddwarf.conf | tee $USERHOME/reddwarf-api.log"
+    screen_it rd-tmgr "cd $REDDWARF_DIR; bin/reddwarf-taskmanager --config-file=$USERHOME/reddwarf-taskmanager.conf | tee $USERHOME/reddwarf-taskmanager.log"
     msgout "DEBUG" "mod:-->"
 }
 
@@ -420,8 +491,11 @@ function start_reddwarf() {
 function stop_reddwarf() {
     local mod="stop_reddwarf"
     msgout "DEBUG" "$mod<-- "    
+    # Kill the reddwarf screen windows
+    for serv in rd-api rd-tmgr; do
+        screen -S $SCREEN_NAME -p $serv -X kill
+    done
     msgout "DEBUG" "mod:-->"
-
 }
 
 # Restore xtrace

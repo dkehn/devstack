@@ -855,6 +855,7 @@ fi
 if is_service_enabled reddwarf; then
     install_reddwarf
     install_reddwarfclient
+    install_diskimagebuilder
 fi
 
 # Initialization
@@ -1931,15 +1932,14 @@ fi
 
 # Configure and launch the reddwarf database as a service api and metadata
 if is_service_enabled reddwarf; then
-    # Initialize reddwarf
+    # Initialize reddwarf, including adding new nova flavours
     echo_summary "Configuring Reddwarf"
     init_reddwarf
-    #echo_summary "Starting Reddwarf"
-    #start_reddwarf
+    
+    # Start the reddwarf API and reddwarf taskmgr components
+    echo_summary "Starting Reddwarf"
+    start_reddwarf
 fi
-
-echo_summary "Done for now"
-exit 0
 
 # Install Images
 # ==============
