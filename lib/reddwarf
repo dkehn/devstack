@@ -42,6 +42,7 @@ PATH_INTEGRATION_CONF=/tmp/reddwarf-integration/
 PATH_ENV_CONF=$PATH_INTEGRATION_CONF/env.rc
 USERHOME=$HOME
 DISKIMAGEBUILDER_DIR=$DEST/diskimage-builder
+DISKIMAGEBUILDER_IMG_DIR=/tmp/images
 RELEASE=precise
 #REDDWARF_DATA_DIR=${REDDWARF_DATA_DIR:-${DATA_DIR}/reddwarf}
 
@@ -57,6 +58,11 @@ function mysql_nova() {
 function rd_manage() {
     cd $REDDWARF_DIR
     bin/reddwarf-manage --config-file=$USERHOME/reddwarf.conf $@
+}
+
+function echo_id_from_table () {
+    # Given a command that returns a table, prints only the id part.
+    echo `$@ | grep ' id ' | awk '{print $4}'`
 }
 
 ###############################################################################
@@ -330,47 +336,98 @@ function add_flavors() {
 ###############################################################################
 # Building guest image and related functions
 ###############################################################################
+
+# Authenticates and gets a token. Requires a username, password, and tenant name.
+# This function assumes localhost keystone at the default port a la devstack.
+function retrieve_token {
+    USERNAME=$1
+    PASSWORD=$2
+    TENANT_NAME=$3
+    curl -d "{\"auth\":{\"passwordCredentials\":{\"username\": \"$USERNAME\", \"password\": \"$PASSWORD\"},\"tenantName\":\"$TENANT_NAME\"}}" \
+ -H "Content-type: application/json" http://localhost:35357/v2.0/tokens|awk '{ print $6 }'|cut -d'"' -f2
+}
+
+function get_glance_id () {
+    echo `$@ | grep ' id ' | get_field 2`
+}
+
+function cmd_glance_client() {
+    REDDWARF_TENANT=`get_tenant_id reddwarf`
+    glance --os-auth-url=http://localhost:35357/v2.0 \
+        --os-username=radmin --os-password=radmin \
+        --os-tenant-id $REDDWARF_TENANT $@
+}
+
+function cmd_set_image() {
+    GLANCE_IMAGEID=$1
+    SERVICE_TYPE=$2
+    #TODO(hub-cap): Upload this sucker to our database.
+    # This should be a reddwarf-manage function
+    msgout "DEBUG" "Registering Glance image $GLANCE_IMAGEID with Reddwarf..."
+
+    rd_manage image_update $SERVICE_TYPE $GLANCE_IMAGEID
+}
+
+function upload_image_to_glance() {
+    msgout "DEBUG" "Uploading the image to glance."
+
+    IMAGE_NAME=$1
+    CONTAINER_FORMAT=$2
+    DISK_FORMAT=$3
+    REDDWARF_TENANT=$4
+    IMAGE_LOC=$5
+    SERVICE_TYPE=$6
+
+    GLANCE_IMAGEID=`get_glance_id cmd_glance_client image-create \
+        --name="$IMAGE_NAME" --public \
+        --container-format=$CONTAINER_FORMAT --disk-format=$DISK_FORMAT \
+        --owner=$REDDWARF_TENANT < $IMAGE_LOC`
+
+    echo "IMAGE ID: $GLANCE_IMAGEID"
+    if [ -z "$GLANCE_IMAGEID" ];
+    then
+        echo "Glance upload failed!"
+        exit 1
+    fi
+
+    cmd_set_image $GLANCE_IMAGEID $SERVICE_TYPE
+}
+
 function build_image() {
     msgout "DEBUG" "Building an image for use with development and integration tests."
-    if [ -z "$1" ]
-    then
-        SERVICE_TYPE=$1
-    else
-        SERVICE_TYPE=dbaas-mysql
-    fi
+    SERVICE_TYPE=mysql
+    ARCH=i386
 
-    if [ -z "$2" ]
-    then
-        ARCH=$2
-    else
-        ARCH=i386
-    fi
-
-
-    mkdir -p $USERHOME/images
-    VM_PATH=$USERHOME/images/precise_${SERVICE_TYPE}_image
+    mkdir -p $DISKIMAGEBUILDER_IMG_DIR
+    VM_NAME=image
+    VM_PATH=$DISKIMAGEBUILDER_IMG_DIR/$VM_NAME
+    msgout "DEBUG" $VM_PATH
 
     # If the path doesnt exist, build it, otherwise just upload it
     if [ ! -d $VM_PATH ]
     then
-        build_vm $VM_PATH $SERVICE_TYPE $ARCH
+        build_vm $DISKIMAGEBUILDER_IMG_DIR $VM_NAME $SERVICE_TYPE $ARCH
     else
         msgout "DEBUG" "Found image in $VM_PATH using the qcow2 image found here..."
     fi
 
-    QCOW_IMAGE=`find $VM_PATH -name '*.qcow2'`
+    QCOW_IMAGE=`find $DISKIMAGEBUILDER_IMG_DIR -name '*.qcow2'`
     REDDWARF_TOKEN=`retrieve_token reddwarf REDDWARF-PASS reddwarf`
 
     # Now upload it
-    upload_image_to_glance "reddwarf_guest_${$SERVICE_TYPE}" ovf qcow2 $REDDWARF_TOKEN $QCOW_IMAGE $SERVICE_TYPE
+    upload_image_to_glance "reddwarf_guest_${SERVICE_TYPE}" ovf qcow2 $REDDWARF_TOKEN $QCOW_IMAGE $SERVICE_TYPE
 }
 
 function build_vm() {      
-    VM_PATH=$1
-    SERVICE_TYPE_ELEMENT=$2    
-    ARCH=$3
-    NOVA_VM_ELEMENT=nova-vm
-    sudo $DISKIMAGEBUILDER_DIR/bin/disk-image-create –o $VM_PATH -a $ARCH $NOVA_VM_ELEMENT $SERVICE_TYPE_ELEMENT
+    VM_DIR=$1
+    VM_NAME=$2
+    SERVICE_TYPE_ELEMENT=$3
+    ARCH=$4
+    VM_ELEMENT=vm
+    
+    pushd $VM_DIR
+    $DISKIMAGEBUILDER_DIR/bin/disk-image-create –o $VM_NAME -a $ARCH $VM_ELEMENT $SERVICE_TYPE_ELEMENT
+    popd 
 }
 
 ###############################################################################
@@ -445,6 +502,7 @@ function install_reddwarf() {
 function install_diskimagebuilder() {
     local mod="install_diskimagebuilder"
     msgout "DEBUG" "$mod<-- "    
+    sed -i "s/-quantal/-precise/g" $DISKIMAGEBUILDER_DIR/lib/img-defaults
     git_clone $DISKIMAGEBUILDER_REPO $DISKIMAGEBUILDER_DIR $DISKIMAGEBUILDER_BRANCH
     msgout "DEBUG" "mod:-->"
 }
