@@ -314,23 +314,32 @@ function fix_rd_configfile() {
 ###############################################################################
 
 function add_flavor() {
+    local mod="add_flavors"
+    msgout "DEBUG" "$mod<-- $FLAVOR_ID ($FLAVOR_NAME), memory=$FLAVOR_MEMORY_MB, root_gb=$FLAVOR_ROOT_GB VCPUS=$5"
     FLAVOR_NAME=$1
     FLAVOR_ID=$2
     FLAVOR_MEMORY_MB=$3
     FLAVOR_ROOT_GB=$4
-    echo "Adding flavor $FLAVOR_ID ($FLAVOR_NAME), memory=$FLAVOR_MEMORY_MB, root_gb=$FLAVOR_ROOT_GB"
-    mysql_nova "INSERT INTO instance_types (name, id, memory_mb, vcpus, deleted, ephemeral_gb, rxtx_factor, flavorid, root_gb, disabled, is_public) VALUES('$FLAVOR_NAME', $FLAVOR_ID, $FLAVOR_MEMORY_MB, 1, 0, 40, 1, $FLAVOR_ID, $FLAVOR_ROOT_GB, 0, 1);"
+    FLAVOR_VCPUS=$5
+    
+    if [[ -z $(nova flavor-list | grep $FLAVOR_NAME) ]]; then
+	nova flavor-create $FLAVOR_NAME $FLAVOR_ID $FLAVOR_MEMORY_MB $FLAVOR_ROOT_GB $FLAVOR_VCPUS
+    fi
+    msgout "DEBUG" "$mod:-->"
 }
 
 function add_flavors() {
+    local mod="add_flavors"
+    msgout "DEBUG" "$mod<-- "    
     # Incredibly useful for testing resize in a VM.
     set +e
-    add_flavor 'tinier' 6 506 10
+    add_flavor 'tinier' 6 506 10 1
     # It can also be useful to have a flavor with 512 megs and a bit of disk space.
-    add_flavor 'm1.rd-tiny' 7 512 2
+    add_flavor 'm1.rd-tiny' 7 512 2 1
     # Its also useful to have a slightly bigger flavor...
-    add_flavor 'm1.rd-smaller' 8 768 2
+    add_flavor 'm1.rd-smaller' 8 768 2 1
     set -e
+    msgout "DEBUG" "$mod:-->"    
 }
 
 ###############################################################################
