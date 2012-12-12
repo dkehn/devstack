@@ -466,11 +466,6 @@ function configure_reddwarf() {
     msgout "DEBUG" "$mod<-- ($REDDWARF_DIR)"    
     setup_develop $REDDWARF_DIR
  
-    # Set up redstack dependencies in addition to reddwarf dependencies
-    # Using ubuntu-vm builder temporarily. What is maven2 used for?
-    # TODO: This needs to be replaced by the tripleo package builder.
-    install_package ubuntu-vm-builder maven2
-
     # Create the reddwarf data dir if it doesn't exist
     sudo mkdir -p ${REDDWARF_DATA_DIR}
     sudo chown -R $USER: ${REDDWARF_DATA_DIR}
